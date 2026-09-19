@@ -3,6 +3,12 @@ const PlatformOffer = require('../models/PlatformOffer');
 const PriceHistory = require('../models/PriceHistory');
 const { fetchLiveProductsFromRapidAPI } = require('../utils/rapidApiHelper');
 
+// Machine Learning Modules
+const { forecastPriceTrends } = require('../ml/priceForecaster');
+const { detectDeceptivePricing } = require('../ml/anomalyDetector');
+const { getSmartRecommendations } = require('../ml/recommender');
+const { analyzeProductSentiment } = require('../ml/sentimentAnalyzer');
+
 // @desc    Search Live Products from RapidAPI
 // @route   GET /api/v1/products/live-search
 // @access  Public
@@ -50,7 +56,6 @@ exports.searchLiveProducts = async (req, res, next) => {
           inStock: true
         });
       } else {
-        // Update price
         offer.currentPrice = item.price;
         offer.originalPrice = item.originalPrice || item.price;
         offer.discountPercentage = discountPercentage;
@@ -65,7 +70,6 @@ exports.searchLiveProducts = async (req, res, next) => {
         price: item.price
       });
 
-      // Prepare response data matching getProducts structure
       processedProducts.push({
         ...product._doc,
         cheapestPrice: offer.currentPrice,
@@ -86,7 +90,7 @@ exports.searchLiveProducts = async (req, res, next) => {
   }
 };
 
-// @desc    Get all products
+// @desc    Get all products with ML insights
 // @route   GET /api/v1/products
 // @access  Public
 exports.getProducts = async (req, res, next) => {
@@ -109,11 +113,22 @@ exports.getProducts = async (req, res, next) => {
       const offers = await PlatformOffer.find({ product: product._id }).sort('currentPrice');
       const cheapestOffer = offers.length > 0 ? offers[0] : null;
       
+      const priceDiff = (product.historicalAveragePrice && cheapestOffer)
+        ? ((product.historicalAveragePrice - cheapestOffer.currentPrice) / product.historicalAveragePrice) * 100
+        : 0;
+
+      let mlBadge = 'Fair Value';
+      if (priceDiff >= 10) mlBadge = 'Strong Buy 🔥';
+      else if (priceDiff >= 4) mlBadge = 'Great Deal';
+      else if (priceDiff <= -8) mlBadge = 'Price High';
+
       return {
         ...product._doc,
-        cheapestPrice: cheapestOffer ? cheapestOffer.currentPrice : null,
-        cheapestPlatform: cheapestOffer ? cheapestOffer.platform : null,
-        offersCount: offers.length
+        cheapestPrice: cheapestOffer ? cheapestOffer.currentPrice : product.historicalAveragePrice,
+        cheapestPlatform: cheapestOffer ? cheapestOffer.platform : 'Various',
+        offersCount: offers.length,
+        mlBadge,
+        discountPercentage: cheapestOffer ? cheapestOffer.discountPercentage : 0
       };
     }));
 
@@ -131,7 +146,7 @@ exports.getProducts = async (req, res, next) => {
   }
 };
 
-// @desc    Get single product details
+// @desc    Get single product details with ML Forecast, Anomaly & Sentiment Intelligence
 // @route   GET /api/v1/products/:id
 // @access  Public
 exports.getProduct = async (req, res, next) => {
@@ -153,29 +168,35 @@ exports.getProduct = async (req, res, next) => {
       if (offer.discountPercentage > highestDiscount.discountPercentage) highestDiscount = offer;
     });
 
-    let fakeDiscountDetected = false;
-    let fakeDiscountDetails = null;
-    if (cheapestOffer && product.historicalAveragePrice) {
-      if (cheapestOffer.currentPrice >= product.historicalAveragePrice && cheapestOffer.discountPercentage > 20) {
-        fakeDiscountDetected = true;
-        fakeDiscountDetails = `The sale price (₹${cheapestOffer.currentPrice}) is not lower than the historical average (₹${product.historicalAveragePrice}), despite claiming a ${cheapestOffer.discountPercentage}% discount.`;
-      }
-    }
+    const currentPrice = cheapestOffer ? cheapestOffer.currentPrice : (product.historicalAveragePrice || 0);
 
-    let prediction = 'Buy Now';
-    let confidence = 85;
-    if (cheapestOffer && product.historicalAveragePrice) {
-      if (cheapestOffer.currentPrice > product.historicalAveragePrice * 1.05) {
-        prediction = 'Wait for Sale';
-        confidence = 90;
-      } else if (cheapestOffer.currentPrice < product.historicalAveragePrice * 0.9) {
-        prediction = 'Buy Now';
-        confidence = 95;
-      } else {
-        prediction = 'Wait 7 Days';
-        confidence = 60;
-      }
-    }
+    // 1. Time-Series Machine Learning Price Forecasting
+    const forecast = forecastPriceTrends(history, currentPrice);
+
+    // 2. Statistical Anomaly & Deceptive Pricing Detection
+    const historicalPriceValues = history.map(h => h.price);
+    const anomaly = detectDeceptivePricing(cheapestOffer, historicalPriceValues, product.historicalAveragePrice);
+
+    // 3. Aspect-Based Review Sentiment & Quality Intelligence
+    const sentiment = analyzeProductSentiment(product, offers, forecast);
+
+    // 4. Content-Based Recommendations (AI Smart Alternatives)
+    const allOtherProducts = await Product.find({ _id: { $ne: product._id } }).limit(10);
+    const otherProductsWithOffers = await Promise.all(allOtherProducts.map(async (p) => {
+      const pOffers = await PlatformOffer.find({ product: p._id }).sort('currentPrice');
+      return {
+        ...p._doc,
+        cheapestPrice: pOffers.length > 0 ? pOffers[0].currentPrice : p.historicalAveragePrice,
+        cheapestPlatform: pOffers.length > 0 ? pOffers[0].platform : 'Store',
+        offersCount: pOffers.length
+      };
+    }));
+
+    const recommendations = getSmartRecommendations(
+      { ...product._doc, cheapestPrice: currentPrice, offersCount: offers.length },
+      otherProductsWithOffers,
+      3
+    );
 
     res.status(200).json({
       success: true,
@@ -189,12 +210,59 @@ exports.getProduct = async (req, res, next) => {
           priceDifference: offers.length > 1 ? (Math.max(...offers.map(o => o.currentPrice)) - cheapestOffer.currentPrice) : 0,
         },
         analysis: {
-          fakeDiscountDetected,
-          fakeDiscountDetails,
-          prediction,
-          confidence
-        }
+          fakeDiscountDetected: anomaly.fakeDiscountDetected,
+          fakeDiscountDetails: anomaly.details,
+          deceptionRiskScore: anomaly.deceptionRiskScore,
+          trueDiscountPercentage: anomaly.trueDiscountPercentage,
+          claimedDiscountPercentage: anomaly.claimedDiscountPercentage,
+          inflationPercent: anomaly.inflationPercent,
+          prediction: forecast.prediction,
+          confidence: forecast.confidence,
+          buyScore: forecast.buyScore,
+          recommendationBadge: forecast.recommendationBadge,
+          dropProbability: forecast.dropProbability,
+          expectedChangePercent: forecast.expectedChangePercent,
+          volatilityPercent: forecast.volatilityPercent,
+          forecastedTrajectory: forecast.forecastedTrajectory,
+          rationale: forecast.rationale
+        },
+        forecast,
+        sentiment,
+        recommendations
       }
+    });
+  } catch (err) {
+    console.error('Error in getProduct:', err);
+    res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+// @desc    Get smart AI recommendations for a product
+// @route   GET /api/v1/products/:id/recommendations
+// @access  Public
+exports.getProductRecommendations = async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'Product not found' });
+    }
+
+    const allProducts = await Product.find({ _id: { $ne: product._id } });
+    const allWithOffers = await Promise.all(allProducts.map(async (p) => {
+      const pOffers = await PlatformOffer.find({ product: p._id }).sort('currentPrice');
+      return {
+        ...p._doc,
+        cheapestPrice: pOffers.length > 0 ? pOffers[0].currentPrice : p.historicalAveragePrice,
+        cheapestPlatform: pOffers.length > 0 ? pOffers[0].platform : 'Store'
+      };
+    }));
+
+    const recommendations = getSmartRecommendations(product, allWithOffers, 4);
+
+    res.status(200).json({
+      success: true,
+      count: recommendations.length,
+      data: recommendations
     });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });

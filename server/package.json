@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test:ml": "node test-ml.js",
+    "test": "node test-ml.js"
   },
   "keywords": [],
   "author": "",
