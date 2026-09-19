@@ -1,134 +1,288 @@
-# PricePulse X - Autonomous Multi-Platform Shopping & AI Price Intelligence System
+# PricePulse X
 
-PricePulse X is a portfolio-grade, full-stack web application that serves as an autonomous multi-store shopping assistant. It aggregates product prices across multiple platforms (Amazon, Flipkart, Croma, Reliance Digital), performs machine learning time-series price forecasting, flags deceptive discounts using statistical anomaly detection, and provides smart vector-similarity recommendations.
+PricePulse X is a full-stack price comparison and AI shopping intelligence app. It compares products across shopping platforms, stores price history, forecasts future price movement, detects suspicious discount behavior, recommends similar alternatives, and includes a conversational AI shopping assistant.
 
----
+The project is built as a MERN-style application with a React/Vite client and an Express/MongoDB API.
 
-## 🧠 Core AI & Machine Learning Architecture
+## Features
 
-PricePulse X integrates **5 genuine AI & Machine Learning modules** designed with formal mathematical principles:
+- Product listing with search, sorting, current cheapest price, platform count, and deal badges
+- Product detail dashboard with price history, 7-day forecast, buy score, volatility, confidence, and drop probability
+- Deceptive pricing detection using historical pricing and claimed discount analysis
+- Smart product recommendations using content-based similarity
+- Aspect-based sentiment and quality scoring
+- User authentication with JWT and bcrypt
+- Cart and order flows for logged-in users
+- AI assistant powered by catalog context, local ML insights, and optional Gemini API access
+- Optional live product search through RapidAPI
 
-### 1. Time-Series Machine Learning Price Forecasting (`server/ml/priceForecaster.js`)
-- **Least-Squares Linear & Polynomial Regression**: Fits trend slope ($\beta_1$), intercept ($\beta_0$), and evaluates goodness-of-fit via Coefficient of Determination ($R^2$).
-- **Exponential Moving Average (EMA-7 & EMA-14)**: Identifies short-term vs. medium-term price momentum.
-- **Price Volatility Index ($\sigma$)**: Measures price variance and risk of sudden price fluctuations.
-- **7-Day Trajectory Projection**: Generates forward-looking daily price projections with 95% confidence intervals, visualized via dual-series Recharts graphs.
-- **Multi-Factor ML Buy Score (0-100)**: Evaluates percentile position in 30-day range (40%), slope direction (30%), mean deviation (20%), and model confidence (10%) to output actionable verdicts:
-  - `Strong Buy` (at historical low, upward bounce projected)
-  - `Buy Now` (fair, stable price)
-  - `Wait 3-5 Days` (high volatility, dip probability > 60%)
-  - `Wait for Sale` (near 30-day peak)
+## AI and ML Modules
 
-### 2. Statistical Anomaly & Deceptive Pricing Detector (`server/ml/anomalyDetector.js`)
-- **E-Commerce Deceptive Pricing / Price Jacking Problem**: Retailers frequently inflate the list price (M.R.P.) right before or during discount events to advertise faux "40% OFF" discounts.
-- **Z-Score Anomaly Detection**:
-  $$Z = \frac{\text{Claimed M.R.P.} - \mu_{\text{history}}}{\sigma_{\text{history}}}$$
-- **True Discount vs. Claimed Discount Metric**:
-  Calculates actual savings relative to the verified rolling median baseline price ($P_{\text{median}}$).
-- **Deception Risk Score (0-100%)**: Detects artificial price inflation and warns consumers with specific rupee amounts.
+The backend includes modular JavaScript ML/statistical utilities:
 
-### 3. Content-Based Vector Recommendation Engine (`server/ml/recommender.js`)
-- **Multi-Attribute Feature Vector Space**: Maps products across category weights (35%), brand ecosystem (20%), normalized price proximity (25%), and lexical tag tokens (20%).
-- **Weighted Cosine Similarity**: Computes similarity scores between items to recommend top alternatives with higher specifications or lower price points.
-
-### 4. Aspect-Based Review Sentiment & Quality Intelligence (`server/ml/sentimentAnalyzer.js`)
-- **Multi-Dimensional Polarity Breakdown**: Evaluates user sentiment across 4 key dimensions:
-  1. Build Quality & Materials
-  2. Performance & Speed
-  3. Value for Money
-  4. Seller & Shipping Reliability
-- **Composite AI Quality Score**: Aggregated 0-10 index with AI-synthesized pros and caveats.
-
-### 5. Context-Aware RAG AI Shopping Assistant (`server/controllers/aiController.js`)
-- **Retrieval-Augmented Generation (RAG)**: Connects the conversational AI directly to live catalog prices and ML trend predictions stored in MongoDB.
-- **Resilient Fallback**: Automatically serves contextual answers and recommended product cards even if external LLM APIs are unreachable.
-
----
+- `server/ml/priceForecaster.js` - trend forecasting, EMA, volatility, confidence, buy score, and forecast trajectory
+- `server/ml/anomalyDetector.js` - suspicious MRP/discount analysis and deception risk scoring
+- `server/ml/recommender.js` - content-based product similarity recommendations
+- `server/ml/sentimentAnalyzer.js` - product quality and sentiment intelligence
+- `server/controllers/aiController.js` - RAG-style shopping assistant using product data and ML context
 
 ## Tech Stack
 
-- **Frontend:** React 19 (Vite), Tailwind CSS v4, Context API, React Router v7, Recharts, Lucide React
-- **Backend:** Node.js, Express.js, MongoDB, Mongoose
-- **Machine Learning Suite:** Modular Pure Mathematical/Statistical ML Engine in Node.js (Linear Regression, EMA, Z-Score Outlier Analysis, Cosine Similarity)
-- **AI Integration:** Google Gemini API (OpenAI-compatible client) with local RAG context injection
-- **Authentication:** JWT (JSON Web Tokens) & bcryptjs
+**Frontend**
 
----
+- React 19
+- Vite
+- Tailwind CSS 4
+- React Router
+- Axios
+- Recharts
+- Framer Motion
+- Lucide React
 
-## Setup Instructions
+**Backend**
 
-### Prerequisites
-- Node.js (v18+)
-- MongoDB (Local instance running on `mongodb://127.0.0.1:27017` or Atlas URI)
+- Node.js
+- Express 5
+- MongoDB
+- Mongoose
+- JWT
+- bcryptjs
+- OpenAI-compatible client for Gemini
 
-### Installation
+## Project Structure
 
-1. **Clone the repository and install backend dependencies:**
-   ```bash
-   cd server
-   npm install
-   ```
+```text
+XPULSE_PRICE_COMPARATOR/
+  client/                 React/Vite frontend
+    src/
+      components/
+      context/
+      pages/
+      utils/
+  server/                 Express API
+    config/
+    controllers/
+    middleware/
+    ml/
+    models/
+    routes/
+    utils/
+    seeder.js
+    server.js
+  run-all.bat             Windows helper to start client and server
+  README.md
+```
 
-2. **Configure Environment Variables:**
-   Ensure `server/.env` contains your `MONGO_URI`, `JWT_SECRET`, and optional `GEMINI_API_KEY`:
-   ```env
-   PORT=5000
-   MONGO_URI=mongodb://127.0.0.1:27017/pricepulse_x
-   JWT_SECRET=your_jwt_secret_key
-   GEMINI_API_KEY=your_gemini_api_key
-   ```
+## Prerequisites
 
-3. **Seed the Database with Multi-Store Data & 30-Day Histories:**
-   ```bash
-   node seeder.js -i
-   ```
+- Node.js 18 or newer
+- npm
+- MongoDB running locally or a MongoDB Atlas connection string
 
-4. **Run the Machine Learning Unit Test Suite:**
-   ```bash
-   npm test
-   # or: npm run test:ml
-   ```
+## Environment Variables
 
-5. **Install Frontend Dependencies:**
-   ```bash
-   cd ../client
-   npm install
-   ```
+Create `server/.env` from the example file:
 
----
+```powershell
+cd server
+copy .env.example .env
+```
 
-## Running the Application
+Then update the values:
 
-### Option A: Using the Automated Script (Windows)
-Double-click `run-all.bat` or run:
-```bash
+```env
+NODE_ENV=development
+PORT=5000
+MONGO_URI=mongodb://127.0.0.1:27017/pricepulse_x
+JWT_SECRET=replace_with_a_strong_secret
+JWT_EXPIRE=30d
+
+GEMINI_API_KEY=replace_with_your_gemini_api_key
+RAPIDAPI_KEY=replace_with_your_rapidapi_key
+RAPIDAPI_HOST=real-time-amazon-data.p.rapidapi.com
+```
+
+Notes:
+
+- `GEMINI_API_KEY` is optional for fallback AI behavior, but recommended for full assistant responses.
+- `RAPIDAPI_KEY` and `RAPIDAPI_HOST` are required only for live product search.
+- Do not commit `server/.env` to GitHub.
+
+## Installation
+
+Install backend dependencies:
+
+```powershell
+cd server
+npm install
+```
+
+Install frontend dependencies:
+
+```powershell
+cd ../client
+npm install
+```
+
+## Seed the Database
+
+From the `server` folder:
+
+```powershell
+node seeder.js -i
+```
+
+This loads sample products, platform offers, and price history data for the app.
+
+## Run Locally
+
+### Option 1: Windows helper
+
+From the project root:
+
+```powershell
 .\run-all.bat
 ```
 
-### Option B: Manual Execution
-1. **Start Backend Server:**
-   ```bash
-   cd server
-   npm run dev
-   ```
-   *Server runs on http://localhost:5000*
+This opens separate terminal windows for the backend and frontend.
 
-2. **Start Frontend Client:**
-   ```bash
-   cd client
-   npm run dev
-   ```
-   *Client runs on http://localhost:5173*
+### Option 2: Manual start
 
----
+Start the API:
 
-## Demo Walkthrough
+```powershell
+cd server
+npm run dev
+```
 
-1. Open `http://localhost:5173` to view products with real-time **ML Deal Badges** (`Strong Buy 🔥`, `Great Deal`, `Fair Value`).
-2. Click any product (e.g. *Asus ROG Strix G15* or *Apple iPhone 14 Pro Max*) to access the **AI Price Intelligence Dashboard**.
-3. View the **Interactive Chart**: Switch between **30-Day History** and the **7-Day ML Forecast Trajectory** (dashed purple curve).
-4. Inspect the **ML Buy Decision Gauge** (Confidence, Drop Probability, and Volatility Index).
-5. Review the **Deceptive Pricing Radar** (flags artificial MRP inflation and calculates True Savings).
-6. Explore the **Aspect-Based Sentiment Intelligence** breakdown (Build Quality, Performance, Value, Seller Reliability).
-7. Scroll down to see **AI Recommended Alternatives** computed via Cosine Similarity.
-8. Click **AI Assistant** in the navigation bar to interact with the RAG-powered shopping assistant.
+The API runs at:
+
+```text
+http://localhost:5000
+```
+
+Start the frontend in another terminal:
+
+```powershell
+cd client
+npm run dev
+```
+
+The client runs at:
+
+```text
+http://localhost:5173
+```
+
+## API Routes
+
+Base URL:
+
+```text
+http://localhost:5000/api/v1
+```
+
+Main routes:
+
+- `POST /auth/register` - register a new user
+- `POST /auth/login` - log in and receive a JWT
+- `GET /auth/me` - get the current logged-in user
+- `GET /products` - get products with pricing insights
+- `GET /products/live-search?query=phone` - search live products through RapidAPI
+- `GET /products/:id` - get product details with ML analysis
+- `GET /products/:id/recommendations` - get smart alternatives
+- `GET /cart` - get user cart
+- `POST /cart` - add/update cart item
+- `DELETE /cart/:itemId` - remove cart item
+- `GET /cart/optimize` - optimize cart pricing
+- `GET /orders` - get user orders
+- `POST /orders` - create an order
+- `POST /orders/checkout` - checkout cart
+- `POST /ai/chat` - chat with the AI shopping assistant
+
+Protected routes require:
+
+```text
+Authorization: Bearer <token>
+```
+
+## Useful Scripts
+
+Backend:
+
+```powershell
+cd server
+npm run dev
+npm start
+npm test
+npm run test:ml
+```
+
+Frontend:
+
+```powershell
+cd client
+npm run dev
+npm run build
+npm run lint
+npm run preview
+```
+
+## Demo Flow
+
+1. Start MongoDB, the backend, and the frontend.
+2. Open `http://localhost:5173`.
+3. Register or log in.
+4. Browse products and compare prices across platforms.
+5. Open a product detail page to inspect price history, forecast, buy score, and discount risk.
+6. Add products to the cart and test checkout.
+7. Open the AI Assistant and ask for shopping recommendations.
+
+## Updating This Project on GitHub
+
+After editing files locally, run these commands from the project root:
+
+```powershell
+git status
+git add README.md
+git commit -m "Update README"
+git push
+```
+
+If you also want to push all other changed files:
+
+```powershell
+git status
+git add .
+git commit -m "Update project files"
+git push
+```
+
+If this is your first push for the current branch:
+
+```powershell
+git branch --show-current
+git push -u origin <branch-name>
+```
+
+Replace `<branch-name>` with the branch shown by `git branch --show-current`, for example `main`.
+
+## GitHub Setup for a New Remote
+
+If the local project is not connected to a GitHub repository yet:
+
+```powershell
+git remote -v
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git branch -M main
+git push -u origin main
+```
+
+Replace `YOUR_USERNAME` and `YOUR_REPO` with your GitHub username and repository name.
+
+## Security Notes
+
+- Keep `.env` files private.
+- Rotate any API keys that were accidentally committed.
+- Use a strong `JWT_SECRET`.
+- For production, set a deployed frontend URL in CORS configuration instead of allowing every origin.
